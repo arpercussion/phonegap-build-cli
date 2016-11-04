@@ -1,0 +1,32 @@
+{
+  "name": "phonegap-build-cli",
+  "version": "0.0.1",
+  "description": "Command line wrapper around phonegap-build-api",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bin": {
+    "pg-build": "./index.js"
+  },
+  "dependencies": {
+    "co": "^4.6.0",
+    "co-prompt": "^1.0.0",
+    "commander": "^2.9.0",
+    "rsvp": "^3.3.3",
+    "phonegap-build-api": "^0.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arpercussion/phonegap-build-cli.git"
+  },
+  "keywords": [
+    "phonegap"
+  ],
+  "author": "ARomano",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/arpercussion/phonegap-build-cli/issues"
+  },
+  "homepage": "https://github.com/arpercussion/phonegap-build-cli#readme"
+}
