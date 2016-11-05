@@ -13,8 +13,8 @@
     "co": "^4.6.0",
     "co-prompt": "^1.0.0",
     "commander": "^2.9.0",
-    "rsvp": "^3.3.3",
-    "phonegap-build-api": "^0.4.0"
+    "phonegap-build-api": "^0.4.0",
+    "easy-table": "^1.0.0"
   },
   "repository": {
     "type": "git",

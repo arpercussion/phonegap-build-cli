@@ -3,8 +3,11 @@
 var program = require('commander'),
     co = require('co'),
     fs = require('fs'),
+    os = require('os'),
+    path = require('path'),
     prompt = require('co-prompt'),
     client = require('phonegap-build-api'),
+    Table = require('easy-table'),
     actions = [{
         id: 0,
         name: 'me',
@@ -96,6 +99,20 @@ var program = require('commander'),
         method: 'delete',
         desc: 'Delete a specific key'
     }],
+    format = function (s) {
+        var i, reg, count = arguments.length - 1;
+        for (i = 0; i < count; i += 1) {
+            reg = new RegExp('\\{' + i + '\\}', 'gm');
+            s = s.replace(reg, arguments[i + 1]);
+        }
+        return s;
+    },
+    isNullOrEmpty = function (o) {
+        return o === undefined || !o || o.length <= 0 || o === '';
+    },
+    endsWith = function (str, suffix) {
+        return str.indexOf(suffix, str.length - suffix.length) !== -1;
+    },
     getAction = function (action) {
         var i = 0,
             l = actions.length,
@@ -115,11 +132,11 @@ var program = require('commander'),
     platformToExtension = function (platform) {
         var ext = '';
         if (platform === 'ios') {
-            ext = 'ipa';
+            ext = '.ipa';
         } else if (platform === 'android') {
-            ext = 'apk';
+            ext = '.apk';
         } else if (platform === 'windows') {
-            ext = 'xap';
+            ext = '.xap';
         }
         return ext;
     },
@@ -154,6 +171,10 @@ var program = require('commander'),
                     var file = args.app_id + platformToExtension(args.platform),
                         ws = fs.createWriteStream(file);
 
+                    ws.on('open', function () {
+                        console.log('Download starting...');
+                    });
+
                     ws.on('finish', function () {
                         console.log('Download complete.  File can be found here: ' + __dirname + '/' + file);
                         process.exit(0);
@@ -184,12 +205,27 @@ var program = require('commander'),
             console.log('Error! No action was supplied.');
             process.exit(1);
         }
+    },
+    printActions = function () {
+        var i = 0,
+            l = actions.length,
+            t = new Table();
+
+        for (i; i < l; i += 1) {
+            var action = actions[i];
+            t.cell('Name', action.name);
+            t.cell('Description', action.desc);
+            t.cell('Url', action.url);
+            t.newRow()
+        }
+        console.log(t.toString());
     };
 
 // Command line argument handling
 program
     .arguments('<payload>')
     .option('-u, --username <username>', 'The User to authenticate as')
+    .option('-l, --list', 'List the available actions')
     .option('-p, --password <password>', 'The User\'s password')
     .option('-i, --app_id <app_id>', 'The Phonegap Build Application id')
     .option('-c, --collaborator_id <collaborator_id>', 'The Phonegap Build Collaborator id')
@@ -197,15 +233,22 @@ program
     .option('-d, --platform <platform>', 'The Phonegap Build platform')
     .option('-a, --action <action>', 'The Phonegap Build action to perform')
     .action(function (payload) {
+        // only get here if there is a payload
         program.payload = payload;
     })
     .parse(process.argv);
 
 // Prompt for username/password if not passed in
 co(function *() {
-    program.username = program.username || (yield prompt('username: '));
-    program.password = program.password || (yield prompt.password('password: '));
-    return program;
+    if (program.list) {
+        // special case, only asking for list of actions
+        printActions();
+        process.exit(0);
+    } else {
+        program.username = program.username || (yield prompt('username: '));
+        program.password = program.password || (yield prompt.password('password: '));
+        return program;
+    }
 }).then(function (value) {
     // Process the command
     processCommand(value);
