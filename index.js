@@ -114,6 +114,7 @@ var program = require('commander'),
         return str.indexOf(suffix, str.length - suffix.length) !== -1;
     },
     getAction = function (action) {
+        // find action by id or name
         var i = 0,
             l = actions.length,
             f = false,
@@ -129,84 +130,27 @@ var program = require('commander'),
     isAction = function (action) {
         return !!getAction(action);
     },
-    platformToExtension = function (platform) {
-        var ext = '';
-        if (platform === 'ios') {
-            ext = '.ipa';
-        } else if (platform === 'android') {
-            ext = '.apk';
-        } else if (platform === 'windows') {
-            ext = '.xap';
-        }
-        return ext;
-    },
-    execute = function (action, args) {
-        client.auth({ username: args.username, password: args.password }, function (error, api) {
-            if (error) {
-                console.log('Error! Could not authenticate user.  ', error);
-                process.exit(1);
-            } else {
-                // api requests
-                if (action.method === 'get' || action.method === 'del') {
-                    api[action.method](action.url, function (error, data) {
-                        if (error) {
-                            console.log('Error! Could not perform action ' + action.name, error);
-                            process.exit(1);
-                        } else {
-                            console.log('data:', data);
-                            process.exit(0);
-                        }
-                    });
-                } else if (action.method === 'post' || action.method === 'put') {
-                    api[action.method](action.url, args.payload, function (error, data) {
-                        if (error) {
-                            console.log('Error! Could not perform action ' + action.name, error);
-                            process.exit(1);
-                        } else {
-                            console.log('data:', data);
-                            process.exit(0);
-                        }
-                    });
-                } else if (action.method === 'download') {
-                    var file = args.app_id + platformToExtension(args.platform),
-                        ws = fs.createWriteStream(file);
-
-                    ws.on('open', function () {
-                        console.log('Download starting...');
-                    });
-
-                    ws.on('finish', function () {
-                        console.log('Download complete.  File can be found here: ' + __dirname + '/' + file);
-                        process.exit(0);
-                    });
-
-                    ws.on('error', function (error) {
-                        console.log('Error! Download failed.', error);
-                    });
-
-                    api.get(action.url).pipe(ws);
+    handleError = function (msg, error, exit) {
+        var metadata = '';
+        if (!isNullOrEmpty(error)) {
+            if (typeof error === 'object') {
+                try {
+                    metadata = JSON.stringify(error);
+                } catch (e) {
+                    metadata = 'Could not parse extra error information';
                 }
+            } else {
+                metadata = error;
             }
-        });
-    },
-    processCommand = function (args) {
-        var action = null;
-        if (args.action && isAction(args.action)) {
-            action = getAction(args.action);
-            action.url = action.url
-                .replace(/:app_id/, args.app_id)
-                .replace(/:key_id/, args.key_id)
-                .replace(/:collaborator_id/, args.collaborator_id)
-                .replace(/:platform/, args.platform);
-            // perform the action
-            execute(action, args);
-        } else {
-            // no action
-            console.log('Error! No action was supplied.');
+        }
+
+        console.log(msg, metadata);
+        if (exit) {
             process.exit(1);
         }
     },
     printActions = function () {
+        // Print out the list of available actions
         var i = 0,
             l = actions.length,
             t = new Table();
@@ -218,20 +162,152 @@ var program = require('commander'),
             t.cell('Url', action.url);
             t.newRow()
         }
+        console.log('List of actions:');
+        console.log('');
         console.log(t.toString());
+    },
+    printValidations = function (vs) {
+        // Print out the list of validation errors
+        var i = 0,
+            l = vs.length,
+            t = new Table();
+
+        for (i; i < l; i += 1) {
+            var v = vs[i];
+            t.cell('Action', v.action);
+            t.cell('Message', v.message);
+            t.newRow()
+        }
+        console.log('Validation errors occurred:');
+        console.log('');
+        console.log(t.toString());
+    },
+    platformToExtension = function (platform) {
+        var ext = '';
+        if (platform === 'ios') {
+            ext = 'ipa';
+        } else if (platform === 'android') {
+            ext = 'apk';
+        } else if (platform === 'windows') {
+            ext = 'xap';
+        }
+        return ext;
+    },
+    getFile = function (args) {
+        var id = args.app_id,
+            platform = args.platform,
+            ext = platformToExtension(platform),
+            dir = os.tmpdir(),
+            loc = format('{0}{1}{2}_{3}.{4}', dir, path.sep, id, platform, ext);
+        return loc;
+    },
+    execute = function (action, args) {
+        client.auth({ username: args.username, password: args.password }, function (error, api) {
+            var file, ws;
+
+            if (error) {
+                handleError('Error! Could not authenticate user.  ', error, true);
+            } else {
+                // api requests
+                if (action.method === 'get' || action.method === 'del') {
+                    api[action.method](action.murl, function (error, data) {
+                        if (error) {
+                            handleError('Error! Could not perform action ' + action.name, error, true);
+                        } else {
+                            console.log('data:', data);
+                            process.exit(0);
+                        }
+                    });
+                } else if (action.method === 'post' || action.method === 'put') {
+                    api[action.method](action.murl, args.payload, function (error, data) {
+                        if (error) {
+                            handleError('Error! Could not perform action ' + action.name, error, true);
+                        } else {
+                            console.log('data:', data);
+                            process.exit(0);
+                        }
+                    });
+                } else if (action.method === 'download') {
+                    file = getFile(args);
+                    ws = fs.createWriteStream(file);
+
+                    ws.on('open', function () {
+                        console.log('Download starting...');
+                    });
+
+                    ws.on('finish', function () {
+                        console.log('Download complete.  File can be found here: ' + __dirname + '/' + file);
+                        process.exit(0);
+                    });
+
+                    ws.on('error', function (error) {
+                        handleError('Error! Download failed.', error, true);
+                    });
+
+                    api.get(action.murl).pipe(ws);
+                }
+            }
+        });
+    },
+    validate = function (action, args) {
+        // Validate the arguments for the action
+        // has app_id
+        var validations = [];
+        if ([2, 3, 8, 9, 10, 11].indexOf(action.id) !== -1 && isNullOrEmpty(args.app_id)) {
+            validations.push({ action: action.url, message: 'A valid app id must be supplied' });
+        }
+        // platform_id
+        if ([3, 5, 6, 10, 12, 13, 14].indexOf(action.id) !== -1 && isNullOrEmpty(args.platform)) {
+            validations.push({ action: action.url, message: 'A platform (ios, android,...) must by supplied' });
+        }
+        // key_id
+        if ([5, 13, 14].indexOf(action.id) !== -1 && isNullOrEmpty(args.key_id)) {
+            validations.push({ action: action.url, message: 'A valid key id must be supplied' });
+        }
+        // has payload
+        if ([7, 8, 12, 13].indexOf(action.id) !== -1 && isNullOrEmpty(args.payload)) {
+            validations.push({ action: action.url, message: 'A form-data payload in json format must be supplied' });
+        }
+
+        return validations;
+    },
+    processCommand = function (args) {
+        // Process the command
+        var action = null,
+            validations;
+        if (args.action && isAction(args.action)) {
+            action = getAction(args.action);
+            action.murl = action.url
+                .replace(/:app_id/, args.app_id)
+                .replace(/:key_id/, args.key_id)
+                .replace(/:collaborator_id/, args.collaborator_id)
+                .replace(/:platform/, args.platform);
+            // Validate the action
+            validations = validate(action, args);
+            if (isNullOrEmpty(validations)) {
+                // Perform the action
+                execute(action, args);
+            } else {
+                printValidations(validations);
+            }
+        } else {
+            // no action
+            handleError('Error! No action was supplied.', null, true);
+        }
     };
 
 // Command line argument handling
 program
     .arguments('<payload>')
-    .option('-u, --username <username>', 'The User to authenticate as')
+    .version('1.0.0')
+    .option('-a, --action <action>', 'The Phonegap Build action to perform')
+    .option('-c, --collaborator_id <collaborator_id>', 'The Phonegap Build Collaborator id')
+    .option('-d, --platform <platform>', 'The Phonegap Build platform')
+    .option('-i, --app_id <app_id>', 'The Phonegap Build Application id')
+    .option('-k, --key_id <key_id>', 'The Phonegap Build Signing key id')
     .option('-l, --list', 'List the available actions')
     .option('-p, --password <password>', 'The User\'s password')
-    .option('-i, --app_id <app_id>', 'The Phonegap Build Application id')
-    .option('-c, --collaborator_id <collaborator_id>', 'The Phonegap Build Collaborator id')
-    .option('-k, --key_id <key_id>', 'The Phonegap Build Signing key id')
-    .option('-d, --platform <platform>', 'The Phonegap Build platform')
-    .option('-a, --action <action>', 'The Phonegap Build action to perform')
+    .option('-u, --username <username>', 'The User to authenticate as')
     .action(function (payload) {
         // only get here if there is a payload
         program.payload = payload;
@@ -253,6 +329,5 @@ co(function *() {
     // Process the command
     processCommand(value);
 }, function (error) {
-    console.error('Error! Could not process command line arguments.  ', error.stack);
-    process.exit(1);
+    handleError('Error! Could not process command line arguments.  ', error, true);
 });
