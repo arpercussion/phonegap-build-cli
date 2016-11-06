@@ -40,3 +40,16 @@ $ pg-build -u username -p password -a createApp 'data={...}'
 ```
 
 Will perform a POST request to '/api/v1/apps' with a json payload
+
+```bash
+$ pg-build -h
+```
+
+Wil print help
+
+
+```bash
+$ pg-build -l
+```
+
+Will list all available actions
